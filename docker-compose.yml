@@ -1,0 +1,11 @@
+services:
+  monitor:
+    build: .
+    image: holdings-monitor:latest
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./configs:/app/configs
+    command: ["run"]

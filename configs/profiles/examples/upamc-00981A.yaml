@@ -1,0 +1,22 @@
+name: 00981A
+slug: 00981A
+description: Example UPAMC 00981A holdings monitor profile
+source:
+  type: upamc_excel
+  fund_code: 49YTW
+  export_url: https://www.ezmoney.com.tw/ETF/Fund/AssetExcelNPOI?fundCode=49YTW
+validation:
+  min_records: 20
+  max_records: 120
+  weight_sum_min: 80.0
+  weight_sum_max: 110.0
+  max_missing_holding_value_ratio: 0.40
+  max_single_weight_pct: 20.0
+diff:
+  weight_change_threshold: 0.5
+  max_items_per_section: 10
+notifications:
+  channels:
+    - stdout
+storage:
+  currency: TWD

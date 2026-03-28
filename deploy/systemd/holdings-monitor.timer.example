@@ -1,0 +1,10 @@
+[Unit]
+Description=Run holdings-monitor every day after 18:00
+
+[Timer]
+OnCalendar=*-*-* 18:00:00
+Persistent=true
+Unit=holdings-monitor.service
+
+[Install]
+WantedBy=timers.target

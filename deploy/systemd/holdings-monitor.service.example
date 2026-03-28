@@ -1,0 +1,11 @@
+[Unit]
+Description=Run holdings-monitor once
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/holdings-monitor/holdings-monitor.env
+ExecStart=/usr/bin/env bash -lc '"$HOLDINGS_MONITOR_PROJECT_ROOT"/deploy/systemd/run_randomized_monitor.sh'
+StandardOutput=journal
+StandardError=journal
