@@ -1,366 +1,281 @@
 # holdings-monitor
 
-A config-driven holdings disclosure monitor for ETF and fund portfolios.
+A local holdings monitoring project that runs on Linux and can be scheduled with **systemd user services** and a **user timer**.
 
-`holdings-monitor` fetches a source file, parses holdings, validates the snapshot, stores history, computes diffs, persists raw artifacts, and sends notifications through pluggable channels.
-
-This repository is designed for **public GitHub use, reusable deployment, and user-specific configuration through environment variables**.
-
----
-
-## Features
-
-- Config-driven profile system
-- Source adapter architecture
-- Snapshot history stored in SQLite
-- Raw artifact retention for debugging
-- Validation gate to prevent bad snapshots from becoming canonical
-- Diff reporting between valid snapshots
-- Notification retry workflow
-- Built-in `stdout` notifier
-- Optional LINE Messaging API notifier
-- Docker-ready layout
-- systemd deployment templates
+This project is intended to:
+- run the holdings monitor manually for one-shot execution,
+- schedule it periodically with `systemd --user`,
+- keep the workflow isolated inside a Conda environment,
+- make troubleshooting reproducible through `systemctl` and `journalctl`.
 
 ---
 
-## Repository layout
+## 1. Environment
+
+This project was operated in a Conda environment:
+
+```bash
+conda activate holdings-monitor
+```
+
+Recommended platform:
+- Ubuntu / Linux desktop
+- `systemd --user`
+- Conda-managed Python environment
+
+---
+
+## 2. Project structure
+
+A typical structure is:
 
 ```text
 holdings-monitor/
-├─ src/holdings_monitor/
-│  ├─ cli.py
-│  ├─ config.py
-│  ├─ notify/
-│  ├─ pipeline/
-│  ├─ sources/
-│  └─ storage/
-├─ configs/
-│  └─ profiles/
-│     ├─ examples/
-│     └─ local/
-├─ deploy/
-│  └─ systemd/
-├─ tests/
-├─ Dockerfile
-├─ docker-compose.yml
-├─ .env.example
-└─ README.md
+├── README.md
+├── src/                     # source code
+├── requirements.txt         # optional dependency list
+└── systemd/
+    ├── holdings-monitor.service
+    └── holdings-monitor.timer
 ```
 
----
-
-## Supported execution model
-
-This project is a **stateful batch monitor**.
-
-It is intended to be run:
-- manually from the CLI
-- through Docker
-- from `cron`
-- from a `systemd` timer
-
-It is **not** a web server, daemon, or built-in scheduler.
+If your repository structure differs, adjust the paths in the systemd unit files accordingly.
 
 ---
 
-## Quick start (Conda)
+## 3. Running the project manually
+
+Before using the timer, first verify that the monitor can run manually.
+
+Example:
 
 ```bash
-conda create -n holdings-monitor python=3.12 -y
 conda activate holdings-monitor
-python -m pip install -e .[dev]
-cp .env.example .env
+cd ~/Programming_linux/holdings-monitor
+python main.py
 ```
 
-Create a local profile:
+If your entry file is not `main.py`, replace it with the actual command used by your project.
 
-```bash
-mkdir -p configs/profiles/local
-cp configs/profiles/examples/upamc-00981A.yaml configs/profiles/local/my-profile.yaml
-```
-
-Set the default profile path in `.env`:
-
-```bash
-HOLDINGS_MONITOR_PROFILE=configs/profiles/local/my-profile.yaml
-```
-
-Run a dry run:
-
-```bash
-holdings-monitor run --dry-run --print-top 10
-```
-
-Run with an explicit profile:
-
-```bash
-holdings-monitor run --profile configs/profiles/local/my-profile.yaml --dry-run --print-top 10
-```
+This step matters because if the project cannot run manually, the systemd service will also fail.
 
 ---
 
-## Environment variables
+## 4. systemd user service and timer
 
-### Core runtime
+This project is configured as a **user-level** systemd task rather than a system-wide service.
 
-```bash
-HOLDINGS_MONITOR_ENV=development
-HOLDINGS_MONITOR_PROFILE=configs/profiles/local/my-profile.yaml
-HOLDINGS_MONITOR_DATA_DIR=data
-HOLDINGS_MONITOR_LOG_DIR=logs
-HOLDINGS_MONITOR_DB_PATH=data/holdings_monitor.db
-HOLDINGS_MONITOR_LOG_LEVEL=INFO
-HOLDINGS_MONITOR_TIMEZONE=Asia/Taipei
-```
-
-### Optional source override
+Useful commands:
 
 ```bash
-HOLDINGS_MONITOR_SOURCE_EXPORT_URL_OVERRIDE=
+systemctl --user daemon-reload
+systemctl --user enable --now holdings-monitor.timer
+systemctl --user start holdings-monitor.service
+systemctl --user status holdings-monitor.service
 ```
 
-Use this when you want to override the source export URL without editing the profile file.
-
-### Optional LINE notifier
-
-```bash
-LINE_CHANNEL_ACCESS_TOKEN=
-LINE_TO_USER_ID=
-```
-
-LINE is optional. The public example profile uses `stdout` only.
-
-### Deployment helper variables
-
-```bash
-HOLDINGS_MONITOR_PROJECT_ROOT=
-HOLDINGS_MONITOR_PYTHON_BIN=
-HOLDINGS_MONITOR_RANDOM_DELAY_MAX_SECONDS=5400
-HOLDINGS_MONITOR_LOCK_FILE=/tmp/holdings-monitor.lock
-HOLDINGS_MONITOR_RUNNER_LOG_FILE=
-PYTHONNOUSERSITE=1
-```
+What they do:
+- `daemon-reload`: reloads unit definitions after editing `.service` or `.timer`
+- `enable --now ...timer`: enables the timer at login and starts it immediately
+- `start ...service`: triggers a one-time run of the job
+- `status ...service`: checks whether the run succeeded or failed
 
 ---
 
-## CLI commands
+## 5. Observed execution result during setup
 
-### Run the monitor
-
-```bash
-holdings-monitor run
-```
-
-### Run with explicit profile
+During setup, the following behavior was observed:
 
 ```bash
-holdings-monitor run --profile configs/profiles/local/my-profile.yaml
+systemctl --user daemon-reload
+systemctl --user enable --now holdings-monitor.timer
+systemctl --user start holdings-monitor.service
+systemctl --user status holdings-monitor.service
 ```
 
-### Dry run
-
-```bash
-holdings-monitor run --dry-run --print-top 10
-```
-
-### Force a notification even when there is no diff
-
-```bash
-holdings-monitor run --force-notify
-```
-
-### Verify LINE credentials
-
-```bash
-holdings-monitor verify-line
-```
-
-### Send a LINE test message
-
-```bash
-holdings-monitor test-line --message "monitor online"
-```
-
-### Retry failed or pending notifications
-
-```bash
-holdings-monitor retry-notifications
-```
-
----
-
-## Profiles
-
-Profiles live under `configs/profiles/`.
-
-### Public examples
-Store reusable sample profiles in:
+The service failed with an exit code:
 
 ```text
-configs/profiles/examples/
+Job for holdings-monitor.service failed because the control process exited with error code.
+See "systemctl --user status holdings-monitor.service" and "journalctl --user -xeu holdings-monitor.service" for details.
+× holdings-monitor.service - Run holdings-monitor once
+     Loaded: loaded (/home/kevan/.config/systemd/user/holdings-monitor.service; static)
+     Active: failed (Result: exit-code)
 ```
 
-### Local/private profiles
-Store user-specific profiles in:
-
-```text
-configs/profiles/local/
-```
-
-`configs/profiles/local/` should be ignored by Git.
-
-### Example profile fields
-
-- source type and URL
-- validation thresholds
-- diff thresholds
-- notification channels
-- storage metadata such as currency
+This means the timer was registered, but the actual service command did not complete successfully.
 
 ---
 
-## Notifications
+## 6. How to debug a failed service
 
-Supported notifier channels currently include:
-
-- `stdout`
-- `line`
-
-For public examples, use:
-
-```yaml
-notifications:
-  channels:
-    - stdout
-```
-
-To enable LINE in your local profile:
-
-```yaml
-notifications:
-  channels:
-    - stdout
-    - line
-```
-
-Then set `LINE_CHANNEL_ACCESS_TOKEN` and `LINE_TO_USER_ID` in your environment.
-
----
-
-## Artifacts generated per run
-
-Artifacts are written under:
-
-```text
-data/artifacts/<profile_slug>/<run_id>/
-```
-
-Each run can generate:
-
-- `raw.xlsx`
-- `parsed.csv`
-- `validation.json`
-- `diff.json`
-
-This is useful for debugging source changes and parser failures.
-
----
-
-## Docker
-
-Build and run:
+When the service fails, use the following commands:
 
 ```bash
-docker compose build
-docker compose run --rm monitor run --dry-run
+systemctl --user status holdings-monitor.service
+journalctl --user -xeu holdings-monitor.service
 ```
 
-If your `.env` sets `HOLDINGS_MONITOR_PROFILE`, the default `run` command is enough.
+Check for these common problems:
+
+### 6.1 Wrong `ExecStart`
+The command inside the service file may point to:
+- the wrong Python executable,
+- the wrong script path,
+- a file that is not executable,
+- or a working directory mismatch.
+
+A reliable pattern is to use absolute paths inside the service file, for example:
+
+```ini
+ExecStart=/home/kevan/miniconda3/envs/holdings-monitor/bin/python /home/kevan/Programming_linux/holdings-monitor/main.py
+```
+
+### 6.2 Conda environment not loaded in systemd
+A terminal session may know your Conda environment, but `systemd` does not automatically inherit that interactive shell state.
+
+So the service should call the Python binary inside the target Conda environment directly.
+
+### 6.3 Wrong working directory
+If your script depends on relative paths, add:
+
+```ini
+WorkingDirectory=/home/kevan/Programming_linux/holdings-monitor
+```
+
+### 6.4 Missing permissions
+If the script reads local files such as config, CSV, logs, or credentials, verify that the user account running the service has access.
+
+### 6.5 Program runs in terminal but fails in service mode
+This usually means the script depends on shell-specific state such as:
+- activated Conda environment,
+- environment variables,
+- current working directory,
+- user-specific PATH,
+- or manually exported secrets.
+
+In that case, define them explicitly in the service file.
 
 ---
 
-## systemd deployment
+## 7. Example service file
 
-Example user-level systemd files are included under:
+Below is a reference template for `~/.config/systemd/user/holdings-monitor.service`:
 
-```text
-deploy/systemd/
+```ini
+[Unit]
+Description=Run holdings-monitor once
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/kevan/Programming_linux/holdings-monitor
+ExecStart=/home/kevan/miniconda3/envs/holdings-monitor/bin/python /home/kevan/Programming_linux/holdings-monitor/main.py
+Restart=no
+
+[Install]
+WantedBy=default.target
 ```
 
-See:
-
-```text
-deploy/systemd/README.md
-```
-
-This setup supports:
-- daily execution after 18:00
-- randomized delay
-- lock protection
-- environment-file based deployment
-- no hard-coded private paths in tracked files
+If your script file is different, replace `main.py` with the actual entry point.
 
 ---
 
-## Example cron entry
+## 8. Example timer file
 
-```cron
-15 18 * * 1-5 cd /path/to/holdings-monitor && /usr/bin/docker compose run --rm monitor run >> logs/cron.log 2>&1
+Reference template for `~/.config/systemd/user/holdings-monitor.timer`:
+
+```ini
+[Unit]
+Description=Run holdings-monitor periodically
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=30min
+Unit=holdings-monitor.service
+
+[Install]
+WantedBy=timers.target
 ```
 
-For long-term host-based deployment, systemd is recommended over cron.
+This example means:
+- run once about 1 minute after login/boot,
+- then rerun every 30 minutes after the previous activation.
 
 ---
 
-## Development
+## 9. Reloading after modification
 
-Install development dependencies:
+Whenever the `.service` or `.timer` file is changed, run:
 
 ```bash
-python -m pip install -e .[dev]
+systemctl --user daemon-reload
+systemctl --user restart holdings-monitor.timer
 ```
 
-Run checks:
+To test one-shot execution again:
 
 ```bash
-ruff check .
-python -m pytest
+systemctl --user start holdings-monitor.service
+systemctl --user status holdings-monitor.service
 ```
 
 ---
 
-## Security
+## 10. Recommended verification checklist
 
-Do not commit:
-- `.env`
-- database files
-- `data/`
-- `logs/`
-- generated CSV/XLSX files
-- local profiles
-- copied systemd unit files with private paths
+Before considering the setup complete, verify:
 
-If secrets were ever committed, rotate them and clean Git history.
+```bash
+conda activate holdings-monitor
+cd ~/Programming_linux/holdings-monitor
+python main.py
+```
 
-See also:
-- `SECURITY.md`
-- `CONTRIBUTING.md`
+Then verify systemd:
 
----
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now holdings-monitor.timer
+systemctl --user list-timers --all | grep holdings-monitor
+systemctl --user start holdings-monitor.service
+systemctl --user status holdings-monitor.service
+journalctl --user -u holdings-monitor.service -n 50 --no-pager
+```
 
-## Public GitHub checklist
-
-Before publishing or sharing the repository:
-
-1. remove private runtime files from tracking
-2. verify `.env`, `data/`, `logs/`, `*.db`, `*.csv`, and `*.xlsx` are ignored
-3. store only example profiles in the tracked repo
-4. keep deployment-specific environment files outside the repository
-5. enable GitHub secret scanning, branch protection, and Dependabot
+What success looks like:
+- the timer appears in `list-timers`,
+- the service exits cleanly,
+- logs show the script executed as expected,
+- repeated runs occur according to the timer policy.
 
 ---
 
-## License
+## 11. Git and submission note
 
-MIT
+If this project is part of an assignment or portfolio repository, update and push again **only if**:
+- you changed the README,
+- you fixed the service/timer files,
+- or you corrected setup instructions so others can reproduce the project.
+
+If nothing changed in the repository, another push is unnecessary.
+
+A README update is worth including because it documents:
+- how the project is actually executed,
+- how the timer is enabled,
+- what failure was encountered,
+- and how the issue should be debugged.
+
+---
+
+## 12. Current status summary
+
+Based on the recorded setup process:
+- the Conda environment was used successfully,
+- the user-level timer was enabled,
+- the user-level service was invoked manually,
+- the service currently fails with `Result: exit-code`,
+- so the remaining work is not timer registration but fixing the actual service command/runtime environment.
+
+In other words, the scheduling layer is mostly in place; the failure is in the command execution path.
+
