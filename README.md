@@ -384,17 +384,7 @@ This indicates that the overall deployment pattern is valid once:
 
 ---
 
-## 10. About the later `KeyboardInterrupt` seen in logs
-
-A later log also showed `KeyboardInterrupt` while importing `openpyxl`.
-
-That is usually **not a normal application bug**. It typically means the process was manually interrupted, the service was stopped, or the shell/session sent an interrupt while the job was running.
-
-So treat it differently from a configuration error.
-
----
-
-## 11. Fast troubleshooting checklist
+## 10. Fast troubleshooting checklist
 
 When the service fails, run these commands first:
 
@@ -449,7 +439,7 @@ If E fails, `systemd` is not the main problem.
 
 ---
 
-## 12. Common reasons a user-level systemd service fails
+## 11. Common reasons a user-level systemd service fails
 
 ### 1. Wrong `HOLDINGS_MONITOR_PROJECT_ROOT`
 This was the main real issue observed in deployment.
@@ -471,7 +461,7 @@ The user running `systemd --user` must have permission to access the repo, logs,
 
 ---
 
-## 13. Testing without waiting for the daily timer
+## 12. Testing without waiting for the daily timer
 
 Because the default timer is daily at 18:00 and the wrapper script may add a random delay, testing can feel slow.
 
@@ -503,7 +493,7 @@ and modulo by zero will fail.
 
 ---
 
-## 14. Keep the timer active after logout
+## 13. Keep the timer active after logout
 
 If you want the user timer to keep working even when you are not actively logged in:
 
@@ -513,7 +503,7 @@ loginctl enable-linger "$USER"
 
 ---
 
-## 15. Useful commands summary
+## 14. Useful commands summary
 
 ### Manual run
 
@@ -557,7 +547,7 @@ tail -n 100 logs/systemd-monitor.log
 
 ---
 
-## 16. Recommended first-time deployment flow
+## 15. Recommended first-time deployment flow
 
 Use this order:
 
@@ -576,7 +566,7 @@ That order avoids most deployment confusion.
 
 ---
 
-## 17. Final recommendation
+## 16. Final recommendation
 
 If you see this again:
 
